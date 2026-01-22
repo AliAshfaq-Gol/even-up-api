@@ -34,6 +34,18 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    timezone: {
+      type: String,
+      required: [true, 'Please provide a timezone'],
+      trim: true
+    },
+    currency: {
+      type: String,
+      required: [true, 'Please provide a currency'],
+      uppercase: true,
+      trim: true,
+      default: 'PKR',
+    },
     password: {
       type: String,
       required: [true, 'Please provide a password'],

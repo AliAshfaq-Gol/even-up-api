@@ -7,10 +7,10 @@ const jwt = require('jsonwebtoken');
  */
 exports.signup = async (req, res) => {
     try {
-        const { full_name, email, phone_number, password } = req.body;
+        const { full_name, email, phone_number, password, timezone, currency } = req.body;
 
         // Validate all required fields
-        if (!full_name || !email || !phone_number || !password) {
+        if (!full_name || !email || !phone_number || !password || !timezone || !currency) {
             return errorResponse(res, 'All fields are required', 400);
         }
 
@@ -34,6 +34,8 @@ exports.signup = async (req, res) => {
             email,
             phone_number,
             password,
+            timezone,
+            currency,
         });
 
         await user.save();
@@ -100,6 +102,8 @@ exports.login = async (req, res) => {
                 full_name: user.full_name,
                 phone_number: user.phone_number,
                 created_at: user.createdAt,
+                timezone: user.timezone,
+                currency: user.currency
             },
             process.env.JWT_SECRET
         );
@@ -111,6 +115,8 @@ exports.login = async (req, res) => {
             phone_number: user.phone_number,
             is_active: user.is_active,
             created_at: user.createdAt,
+            timezone: user.timezone,
+            currency: user.currency,
         };
 
         return successResponse(

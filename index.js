@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const connectDB = require('./src/config/database');
 const authRoutes = require('./src/routes/auth');
+const expensesRoutes = require('./src/routes/expenses');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -15,21 +16,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/expenses', expensesRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ message: 'API is running', status: 'ok' });
 });
 
-// Health check endpoint
-app.post('/add_user', (req, res) => {
-
-
-
-
-
-  res.json({ message: 'API is running', status: 'ok' });
-});
 
 // 404 handler
 app.use((req, res) => {

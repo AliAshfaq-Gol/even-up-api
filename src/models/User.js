@@ -64,6 +64,12 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: () => Date.now(),
     },
+    friends: [
+      {
+        type: String,
+        ref: 'User',
+      },
+    ],
   },
   {
     timestamps: false,

@@ -3,6 +3,7 @@ const express = require('express');
 const connectDB = require('./src/config/database');
 const authRoutes = require('./src/routes/auth');
 const expensesRoutes = require('./src/routes/expenses');
+const friendsRoutes = require('./src/routes/friends');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/expenses', expensesRoutes);
+app.use('/api/friends', friendsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

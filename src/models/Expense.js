@@ -1,6 +1,24 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
+const splitSchema = new mongoose.Schema({
+  user_id: {
+    type: String,
+    required: true,
+    ref: 'User',
+  },
+  amount: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: true,
+    get: function(value) {
+      if (value != null) {
+        return parseFloat(value.toString());
+      }
+      return value;
+    },
+  },
+}, { _id: false });
+
 const expenseSchema = new mongoose.Schema(
   {
     expense_id: {
@@ -9,15 +27,25 @@ const expenseSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
-    user_id: {
+    group_id: {
       type: String,
-      required: [true, 'User ID is required'],
-      trim: true,
+      required: [true, 'Group ID is required'],
+      ref: 'Group',
+    },
+    payer_id: {
+      type: String,
+      required: [true, 'Payer ID is required'],
+      ref: 'User',
     },
     amount: {
-      type: Number,
+      type: mongoose.Schema.Types.Decimal128,
       required: [true, 'Amount is required'],
-      min: [0, 'Amount must be positive'],
+      get: function(value) {
+        if (value != null) {
+          return parseFloat(value.toString());
+        }
+        return value;
+      },
     },
     description: {
       type: String,
@@ -30,9 +58,21 @@ const expenseSchema = new mongoose.Schema(
       trim: true,
       maxlength: [100, 'Category cannot be more than 100 characters'],
     },
+    participants: [
+      {
+        type: String,
+        required: true,
+        ref: 'User',
+      },
+    ],
+    splits: [splitSchema],
     date: {
       type: Date,
       default: Date.now,
+    },
+    is_settled: {
+      type: Boolean,
+      default: false,
     },
     created_at: {
       type: Number,
@@ -45,10 +85,10 @@ const expenseSchema = new mongoose.Schema(
   },
   {
     timestamps: false,
+    toJSON: { getters: true },
   }
 );
 
-// Update updated_at on every save
 expenseSchema.pre('save', async function (next) {
   this.updated_at = Date.now();
   next();

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Invitation = require('../models/Invitation');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 const jwt = require('jsonwebtoken');
 
@@ -39,6 +40,39 @@ exports.signup = async (req, res) => {
         });
 
         await user.save();
+
+        // Fulfill pending invitations: anyone who invited this phone becomes a friend
+        const pendingInvitations = await Invitation.find({
+          phone_number: user.phone_number,
+          status: 'pending',
+        });
+
+        for (const inv of pendingInvitations) {
+          try {
+            await User.findOneAndUpdate(
+              { user_id: user.user_id },
+              {
+                $push: { friends: inv.inviter_user_id },
+                $set: { updated_at: Date.now() },
+              },
+              { runValidators: false }
+            );
+            await User.findOneAndUpdate(
+              { user_id: inv.inviter_user_id },
+              {
+                $push: { friends: user.user_id },
+                $set: { updated_at: Date.now() },
+              },
+              { runValidators: false }
+            );
+            await Invitation.updateOne(
+              { _id: inv._id },
+              { $set: { status: 'accepted', accepted_at: Date.now() } }
+            );
+          } catch (err) {
+            console.error('Fulfill invitation error:', err);
+          }
+        }
 
         // Remove password from response
         const userResponse = user.toObject();

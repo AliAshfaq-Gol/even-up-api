@@ -36,20 +36,16 @@ const userSchema = new mongoose.Schema(
     },
     timezone: {
       type: String,
-      required: [true, 'Please provide a timezone'],
       trim: true
     },
     currency: {
       type: String,
-      required: [true, 'Please provide a currency'],
       uppercase: true,
       trim: true,
-      default: 'PKR',
     },
     password: {
       type: String,
       required: [true, 'Please provide a password'],
-      minlength: [6, 'Password must be at least 6 characters'],
       select: false, // Don't return password by default
     },
     is_active: {
@@ -64,12 +60,6 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: () => Date.now(),
     },
-    friends: [
-      {
-        type: String,
-        ref: 'User',
-      },
-    ],
   },
   {
     timestamps: false,

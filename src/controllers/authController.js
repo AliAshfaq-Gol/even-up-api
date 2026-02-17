@@ -7,57 +7,51 @@ const jwt = require('jsonwebtoken');
  */
 exports.signup = async (req, res) => {
     try {
-        const { full_name, email, phone_number, password, timezone, currency } = req.body;
+        const { full_name, email, phone_number, password } = req.body;
 
-        // Validate all required fields
-        if (!full_name || !email || !phone_number || !password || !timezone || !currency) {
+        if (!full_name || !email || !phone_number || !password) {
             return errorResponse(res, 'All fields are required', 400);
         }
 
-        // Check if user already exists
         const existingUser = await User.findOne({
             $or: [{ email }, { phone_number }],
         });
 
         if (existingUser) {
             if (existingUser.email === email) {
-                return errorResponse(res, 'Email already registered', 409);
+                return errorResponse(res, 'Email already registered', 200);
             }
             if (existingUser.phone_number === phone_number) {
-                return errorResponse(res, 'Phone number already registered', 409);
+                return errorResponse(res, 'Phone number already registered', 200);
             }
         }
 
-        // Create new user
         const user = new User({
             full_name,
             email,
             phone_number,
             password,
-            timezone,
-            currency,
         });
 
         await user.save();
 
-        // Remove password from response
         const userResponse = user.toObject();
         delete userResponse.password;
+
+        console.log('userResponse', userResponse);
 
         return successResponse(res, userResponse, 'User registered successfully', 201);
     } catch (error) {
         console.error('Signup error:', error);
 
-        // Handle mongoose validation errors
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map((err) => err.message);
             return errorResponse(res, messages.join(', '), 400);
         }
 
-        // Handle duplicate key errors
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern)[0];
-            return errorResponse(res, `${field} already exists`, 409);
+            return errorResponse(res, `${field} already exists`, 200);
         }
 
         return errorResponse(res, 'An error occurred during signup', 500);
@@ -102,8 +96,6 @@ exports.login = async (req, res) => {
                 full_name: user.full_name,
                 phone_number: user.phone_number,
                 created_at: user.createdAt,
-                timezone: user.timezone,
-                currency: user.currency
             },
             process.env.JWT_SECRET
         );
@@ -115,8 +107,6 @@ exports.login = async (req, res) => {
             phone_number: user.phone_number,
             is_active: user.is_active,
             created_at: user.createdAt,
-            timezone: user.timezone,
-            currency: user.currency,
         };
 
         return successResponse(

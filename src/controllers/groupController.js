@@ -68,21 +68,15 @@ exports.createGroup = async (req, res) => {
     }
 };
 
-exports.getGroupsByUser = async (req, res) => {
+exports.getUserGroups = async (req, res) => {
     try {
-        const requestedUserId = req.params.user_id;
-        const tokenUserId = req.user?.user_id;
+        const userId = req.user?.user_id; // pulled from token via verifyToken middleware
 
-        if (!requestedUserId) {
-            return errorResponse(res, 'user_id is required', 400);
+        if (!userId) {
+            return errorResponse(res, 'User not authenticated', 401);
         }
 
-        // Prevent users from fetching other users' groups
-        if (tokenUserId && requestedUserId !== tokenUserId) {
-            return errorResponse(res, 'Forbidden', 403);
-        }
-
-        const groups = await Group.find({ created_by: requestedUserId })
+        const groups = await Group.find({ created_by: userId })
             .sort({ created_at: -1 })
             .populate({
                 path: 'members',
@@ -101,7 +95,8 @@ exports.getGroupsByUser = async (req, res) => {
 
         return successResponse(res, groups, 'Groups fetched successfully', 200);
     } catch (error) {
-        console.error('Get groups by user error:', error);
+        console.error('Get user groups error:', error);
         return errorResponse(res, 'Internal Server Error', 500);
     }
 };
+

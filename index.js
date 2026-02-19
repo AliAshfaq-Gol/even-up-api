@@ -4,6 +4,7 @@ const connectDB = require('./src/config/database');
 const authRoutes = require('./src/routes/auth');
 const expensesRoutes = require('./src/routes/expenses');
 const friendsRoutes = require('./src/routes/friends');
+const groupRoutes = require('./src/routes/group');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/friends', friendsRoutes);
+app.use('/api/group', groupRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

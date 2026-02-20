@@ -1,3 +1,4 @@
+const { logActivity } = require('../helpers/activityLogger');
 const Group = require('../models/Group');
 const User = require('../models/User');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
@@ -38,6 +39,14 @@ exports.createGroup = async (req, res) => {
         console.log('group', group)
 
         await group.save();
+
+        await logActivity({
+            user_id: currentUserId,
+            title: `You created "${group.name}"`,
+            description: group.description,
+            type: 'group',
+            meta: { group_id: group.group_id },
+        });
 
         const populatedGroup = await Group.findOne({ group_id: group.group_id })
             .populate({

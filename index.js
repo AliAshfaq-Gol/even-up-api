@@ -5,6 +5,7 @@ const authRoutes = require('./src/routes/auth');
 const expensesRoutes = require('./src/routes/expenses');
 const friendsRoutes = require('./src/routes/friends');
 const groupRoutes = require('./src/routes/group');
+const activityRoutes = require('./src/routes/activityRoutes');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/group', groupRoutes);
+app.use('/api/activity', activityRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

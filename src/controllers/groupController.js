@@ -15,6 +15,7 @@ exports.createGroup = async (req, res) => {
             startDate,
             endDate,
             totalOwed,
+            totalSpending,
         } = req.body;
 
         const currentUserId = req.user.user_id;
@@ -32,6 +33,7 @@ exports.createGroup = async (req, res) => {
             timezone,
             currency,
             totalOwed: totalOwed || 0,
+            totalSpending: totalSpending || 0,
             members: members || [],
             created_by: currentUserId,
         });

@@ -9,9 +9,10 @@ const expenseSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
-    user_id: {
+    // Added group_id to link expenses to a specific group
+    group_id: {
       type: String,
-      required: [true, 'User ID is required'],
+      required: [true, 'Group ID is required'],
       trim: true,
     },
     amount: {
@@ -25,10 +26,9 @@ const expenseSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, 'Description cannot be more than 500 characters'],
     },
-    category: {
-      type: String,
-      trim: true,
-      maxlength: [100, 'Category cannot be more than 100 characters'],
+    paid_by: {
+      mobile: { type: String, trim: true },
+      name: { type: String, required: true, trim: true }
     },
     date: {
       type: Date,
@@ -43,13 +43,10 @@ const expenseSchema = new mongoose.Schema(
       default: () => Date.now(),
     },
   },
-  {
-    timestamps: false,
-  }
+  { timestamps: false }
 );
 
-// Update updated_at on every save
-expenseSchema.pre('save', async function (next) {
+expenseSchema.pre('save', function (next) {
   this.updated_at = Date.now();
   next();
 });

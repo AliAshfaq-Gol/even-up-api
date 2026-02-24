@@ -1,48 +1,43 @@
 const Expense = require('../models/Expense');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
-/**
- * Create expense controller - Creates a new expense record
- */
 exports.createExpense = async (req, res) => {
   try {
-    const { user_id, amount, description, category, date } = req.body;
+    const { amount, date, description, paid_by, group_id } = req.body;
 
-    // Validate required fields
-    if (!user_id || !amount || !description) {
-      return errorResponse(res, 'User ID, amount, and description are required', 400);
+    // 1. Basic Validation
+    if (!amount || !description || !paid_by || !group_id) {
+      return errorResponse(res, 'Amount, description, group_id, and payer info are required', 400);
     }
 
-    // Validate amount is a positive number
-    if (typeof amount !== 'number' || amount <= 0) {
-      return errorResponse(res, 'Amount must be a positive number', 400);
+    // 2. Convert string amount to Number and validate
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      return errorResponse(res, 'Amount must be a valid positive number', 400);
     }
 
-    // Create new expense
+    // 3. Date Handling
+    // Since you sent "Feb 24", JavaScript's Date constructor will assume the current year.
+    const expenseDate = date ? new Date(date) : new Date();
+
+    // 4. Create new expense
     const expense = new Expense({
-      user_id,
-      amount,
+      group_id,
+      amount: numericAmount,
       description,
-      category: category || undefined,
-      date: date ? new Date(date) : undefined,
+      paid_by,
+      date: expenseDate,
     });
 
     await expense.save();
 
-    return successResponse(res, expense, 'Expense created successfully', 201);
+    return successResponse(res, expense, 'Expense recorded successfully', 201);
   } catch (error) {
     console.error('Create expense error:', error);
 
-    // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map((err) => err.message);
       return errorResponse(res, messages.join(', '), 400);
-    }
-
-    // Handle duplicate key errors
-    if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0];
-      return errorResponse(res, `${field} already exists`, 409);
     }
 
     return errorResponse(res, 'An error occurred while creating expense', 500);

@@ -44,7 +44,7 @@ exports.createGroup = async (req, res) => {
 
         await logActivity({
             user_id: currentUserId,
-            title: `You created "${group.name}"`,
+            title: `You created new group "${group.name}"`,
             description: group.description,
             type: 'group',
             meta: { group_id: group.group_id },

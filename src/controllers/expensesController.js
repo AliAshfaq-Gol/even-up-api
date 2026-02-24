@@ -1,3 +1,4 @@
+const { logActivity } = require('../helpers/activityLogger');
 const Expense = require('../models/Expense');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
@@ -31,6 +32,14 @@ exports.createExpense = async (req, res) => {
 
     await expense.save();
 
+    // await logActivity({
+    //   user_id: currentUserId,
+    //   title: `You created new group "${group.name}"`,
+    //   description: group.description,
+    //   type: 'group',
+    //   meta: { group_id: group.group_id },
+    // });
+
     return successResponse(res, expense, 'Expense recorded successfully', 201);
   } catch (error) {
     console.error('Create expense error:', error);
@@ -41,5 +50,28 @@ exports.createExpense = async (req, res) => {
     }
 
     return errorResponse(res, 'An error occurred while creating expense', 500);
+  }
+};
+
+
+exports.getExpensesByGroup = async (req, res) => {
+  try {
+    const { group_id } = req.params; // We will pass this as a URL parameter
+
+    if (!group_id) {
+      return errorResponse(res, 'Group ID is required', 400);
+    }
+
+    const expenses = await Expense.find({ group_id }).sort({ created_at: -1 });
+
+    return successResponse(
+      res,
+      expenses,
+      `Fetched ${expenses.length} expenses for this group`,
+      200
+    );
+  } catch (error) {
+    console.error('Fetch group expenses error:', error);
+    return errorResponse(res, 'An error occurred while fetching expenses', 500);
   }
 };

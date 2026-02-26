@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, 'Please provide an email'],
+      required: false,
       lowercase: true,
       match: [
         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
@@ -45,7 +45,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Please provide a password'],
+      required: false,
       select: false, // Don't return password by default
     },
     is_active: {
@@ -68,10 +68,10 @@ const userSchema = new mongoose.Schema(
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {
-  // Update updated_at on every save
   this.updated_at = Date.now();
 
-  if (!this.isModified('password')) return next();
+  // ADD THIS CHECK: If there is no password (shadow user), skip hashing
+  if (!this.password || !this.isModified('password')) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);

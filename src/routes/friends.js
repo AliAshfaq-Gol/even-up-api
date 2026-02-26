@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { addFriend, getFriends } = require('../controllers/friendsController');
 const { verifyToken } = require('../middleware/auth');
+const { addMemberAsUser, getMyFriends } = require('../controllers/friendController');
 
 // ✅ Protect routes
-router.post('/add', verifyToken, addFriend);
-router.get('/', verifyToken, getFriends);
+router.post('/add-member', verifyToken, addMemberAsUser);
+router.get('/my-friends', verifyToken, getMyFriends);
 
 module.exports = router;

@@ -87,7 +87,13 @@ exports.getUserGroups = async (req, res) => {
             return errorResponse(res, 'User not authenticated', 401);
         }
 
-        const groups = await Group.find({ created_by: userId })
+        // Search for groups where user is the creator OR a member
+        const groups = await Group.find({
+            $or: [
+                { created_by: userId },
+                { members: userId }
+            ]
+        })
             .sort({ created_at: -1 })
             .populate({
                 path: 'members',
@@ -111,3 +117,67 @@ exports.getUserGroups = async (req, res) => {
     }
 };
 
+// 2. Add function to save members to the group
+exports.addMemberToGroup = async (req, res) => {
+    try {
+        const { group_id, friend_id } = req.body;
+
+        if (!group_id || !friend_id) {
+            return errorResponse(res, 'Group ID and Friend ID are required', 400);
+        }
+
+        // Use $addToSet to prevent duplicate members
+        const group = await Group.findOneAndUpdate(
+            { group_id: group_id },
+            { $addToSet: { members: friend_id } },
+            { new: true }
+        ).populate({
+            path: 'members',
+            model: User,
+            select: 'user_id full_name email phone_number',
+            localField: 'members',
+            foreignField: 'user_id',
+        });
+
+        if (!group) {
+            return errorResponse(res, 'Group not found', 404);
+        }
+
+        return successResponse(res, group, 'Member added to group successfully', 200);
+    } catch (error) {
+        console.error('Add member error:', error);
+        return errorResponse(res, 'Internal Server Error', 500);
+    }
+};
+
+exports.removeMemberFromGroup = async (req, res) => {
+    try {
+        const { group_id, friend_id } = req.body;
+
+        if (!group_id || !friend_id) {
+            return errorResponse(res, 'Group ID and Friend ID are required', 400);
+        }
+
+        // Use $pull to remove the friend_id from the members array
+        const group = await Group.findOneAndUpdate(
+            { group_id: group_id },
+            { $pull: { members: friend_id } },
+            { new: true }
+        ).populate({
+            path: 'members',
+            model: User,
+            select: 'user_id full_name email phone_number',
+            localField: 'members',
+            foreignField: 'user_id',
+        });
+
+        if (!group) {
+            return errorResponse(res, 'Group not found', 404);
+        }
+
+        return successResponse(res, group, 'Member removed from group successfully', 200);
+    } catch (error) {
+        console.error('Remove member error:', error);
+        return errorResponse(res, 'Internal Server Error', 500);
+    }
+};

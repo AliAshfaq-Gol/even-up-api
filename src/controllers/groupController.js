@@ -1,4 +1,5 @@
 const { logActivity } = require('../helpers/activityLogger');
+const Expense = require('../models/Expense');
 const Group = require('../models/Group');
 const User = require('../models/User');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
@@ -81,39 +82,43 @@ exports.createGroup = async (req, res) => {
 
 exports.getUserGroups = async (req, res) => {
     try {
-        const userId = req.user?.user_id; // pulled from token via verifyToken middleware
+        const { user_id } = req.query;
 
-        if (!userId) {
-            return errorResponse(res, 'User not authenticated', 401);
+        if (!user_id) {
+            return errorResponse(res, 'User ID is required', 400);
         }
 
-        // Search for groups where user is the creator OR a member
+        // 1. Find all groups where the user is a member or the creator
         const groups = await Group.find({
-            $or: [
-                { created_by: userId },
-                { members: userId }
-            ]
-        })
-            .sort({ created_at: -1 })
-            .populate({
-                path: 'members',
-                model: User,
-                select: 'user_id full_name email phone_number',
-                localField: 'members',
-                foreignField: 'user_id',
-            })
-            .populate({
-                path: 'created_by',
-                model: User,
-                select: 'user_id full_name email phone_number',
-                localField: 'created_by',
-                foreignField: 'user_id',
-            });
+            $or: [{ created_by: user_id }, { members: user_id }]
+        }).sort({ created_at: -1 });
 
-        return successResponse(res, groups, 'Groups fetched successfully', 200);
+        // 2. Enrich each group with the user's personal balance
+        const enrichedGroups = await Promise.all(groups.map(async (group) => {
+            const expenses = await Expense.find({ group_id: group.group_id });
+
+            const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const allMembers = [...new Set([group.created_by, ...group.members])];
+            const sharePerPerson = totalSpending > 0 ? totalSpending / allMembers.length : 0;
+
+            const userPaid = expenses
+                .filter(exp => String(exp.paid_by.user_id) === String(user_id))
+                .reduce((sum, exp) => sum + exp.amount, 0);
+
+            // We calculate the value and assign it to totalOwed
+            const calculatedOwed = Number((userPaid - sharePerPerson).toFixed(2));
+
+            return {
+                ...group._doc,
+                totalSpending: Number(totalSpending.toFixed(2)),
+                totalOwed: calculatedOwed // This replaces "personalBalance"
+            };
+        }));
+
+        return successResponse(res, enrichedGroups, 'Groups fetched with live balances');
     } catch (error) {
-        console.error('Get user groups error:', error);
-        return errorResponse(res, 'Internal Server Error', 500);
+        console.error('Fetch groups error:', error);
+        return errorResponse(res, 'Error fetching groups', 500);
     }
 };
 

@@ -1,5 +1,6 @@
 const { logActivity } = require('../helpers/activityLogger');
 const Expense = require('../models/Expense');
+const Group = require('../models/Group');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
 exports.createExpense = async (req, res) => {
@@ -69,5 +70,69 @@ exports.getExpensesByGroup = async (req, res) => {
   } catch (error) {
     console.error('Fetch group expenses error:', error);
     return errorResponse(res, 'An error occurred while fetching expenses', 500);
+  }
+};
+
+
+exports.getGroupBalances = async (req, res) => {
+  try {
+    const { group_id } = req.params;
+    const { user_id } = req.query; 
+
+    const group = await Group.findOne({ group_id });
+    const expenses = await Expense.find({ group_id });
+    
+    const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const allMemberIds = [...new Set([group.created_by, ...group.members])];
+    const sharePerPerson = totalSpending > 0 ? totalSpending / allMemberIds.length : 0;
+
+    // 1. Calculate Balances (Same as before)
+    let memberBalances = allMemberIds.map(id => {
+      const amountPaid = expenses
+        .filter(exp => String(exp.paid_by.user_id) === String(id))
+        .reduce((sum, exp) => sum + exp.amount, 0);
+      return {
+        user_id: id,
+        amountPaid: amountPaid,
+        netBalance: Number((amountPaid - sharePerPerson).toFixed(2))
+      };
+    });
+
+    // 2. Settlement Algorithm
+    // Separate people into "Payers" and "Receivers"
+    let payers = memberBalances.filter(m => m.netBalance < 0).map(m => ({...m}));
+    let receivers = memberBalances.filter(m => m.netBalance > 0).map(m => ({...m}));
+    
+    let settlements = [];
+
+    // Match them up
+    payers.forEach(payer => {
+      while (Math.abs(payer.netBalance) > 0.01 && receivers.length > 0) {
+        let receiver = receivers[0];
+        let amountToPay = Math.min(Math.abs(payer.netBalance), receiver.netBalance);
+
+        settlements.push({
+          from: payer.user_id,
+          to: receiver.user_id,
+          amount: Number(amountToPay.toFixed(2))
+        });
+
+        payer.netBalance += amountToPay;
+        receiver.netBalance -= amountToPay;
+
+        if (receiver.netBalance <= 0.01) receivers.shift();
+      }
+    });
+
+    const currentUserStanding = memberBalances.find(m => String(m.user_id) === String(user_id));
+
+    return successResponse(res, {
+      totalSpending,
+      myBalance: currentUserStanding ? currentUserStanding.netBalance : 0,
+      allMembers: memberBalances,
+      settlements // This is the new part!
+    }, 'Balances and settlements calculated');
+  } catch (error) {
+    return errorResponse(res, 'Error calculating balances', 500);
   }
 };

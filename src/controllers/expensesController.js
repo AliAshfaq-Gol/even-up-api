@@ -7,7 +7,7 @@ exports.createExpense = async (req, res) => {
     const { amount, date, description, paid_by, group_id } = req.body;
 
     // 1. Basic Validation
-    if (!amount || !description || !paid_by || !group_id) {
+    if (!amount || !description || !paid_by?.full_name || !group_id) {
       return errorResponse(res, 'Amount, description, group_id, and payer info are required', 400);
     }
 
@@ -56,20 +56,16 @@ exports.createExpense = async (req, res) => {
 
 exports.getExpensesByGroup = async (req, res) => {
   try {
-    const { group_id } = req.params; // We will pass this as a URL parameter
+    const { group_id } = req.params;
 
     if (!group_id) {
       return errorResponse(res, 'Group ID is required', 400);
     }
 
-    const expenses = await Expense.find({ group_id }).sort({ created_at: -1 });
+    // Sort by the expense date (descending) so latest expenses are at the top
+    const expenses = await Expense.find({ group_id }).sort({ date: -1, created_at: -1 });
 
-    return successResponse(
-      res,
-      expenses,
-      `Fetched ${expenses.length} expenses for this group`,
-      200
-    );
+    return successResponse(res, expenses, `Fetched ${expenses.length} expenses`, 200);
   } catch (error) {
     console.error('Fetch group expenses error:', error);
     return errorResponse(res, 'An error occurred while fetching expenses', 500);

@@ -7,6 +7,6 @@ const router = express.Router();
 router.post('/create', createExpense);
 
 // Route to get all expenses for a specific group
-router.get('/get-all/:group_id', getExpensesByGroup);
+router.get('/:group_id/get-expenses', getExpensesByGroup);
 
 module.exports = router;

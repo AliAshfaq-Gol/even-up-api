@@ -27,8 +27,8 @@ const expenseSchema = new mongoose.Schema(
       maxlength: [500, 'Description cannot be more than 500 characters'],
     },
     paid_by: {
-      mobile: { type: String, trim: true },
-      name: { type: String, required: true, trim: true }
+      user_id: { type: String, required: true },
+      full_name: { type: String, required: true },
     },
     date: {
       type: Date,

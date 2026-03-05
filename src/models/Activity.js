@@ -1,49 +1,20 @@
 const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid');
 
-const activitySchema = new mongoose.Schema(
-    {
-        activity_id: {
-            type: String,
-            default: uuidv4,
-            unique: true,
-            required: true,
-        },
-        user_id: {
-            type: String,
-            required: true, // who performed the action
-        },
-        title: {
-            type: String,
-            required: true, // short message e.g. "You created a new group"
-        },
-        description: {
-            type: String,
-            default: '', // optional details
-        },
-        type: {
-            type: String,
-            enum: ['group', 'expense', 'payment', 'settlement', 'system'],
-            default: 'system',
-        },
-        amount: {
-            type: Number,
-            default: 0, // for monetary activities
-        },
-        currency: {
-            type: String,
-            default: 'PKR',
-        },
-        meta: {
-            type: Object,
-            default: {}, // store extra info (group_id, expense_id, etc.)
-        },
-        created_at: {
-            type: Number,
-            default: Date.now,
-        },
+const activitySchema = new mongoose.Schema({
+    group_id: { type: String, ref: 'Group', default: null }, // Null if it's a 1:1 friend action
+    user_id: { type: String, required: true }, // The person who performed the action
+    action_type: { 
+        type: String, 
+        enum: ['GROUP_CREATED', 'MEMBER_ADDED', 'MEMBER_REMOVED', 'EXPENSE_ADDED', 'EXPENSE_UPDATED', 'SETTLEMENT'],
+        required: true 
     },
-    { versionKey: false }
-);
+    details: {
+        target_user_id: { type: String }, // e.g., who was added/removed
+        expense_id: { type: String },
+        amount: { type: Number },
+        description: { type: String } // e.g., "Ali added 'Dinner' in 'Trip to Murree'"
+    },
+    timestamp: { type: Date, default: Date.now }
+});
 
 module.exports = mongoose.model('Activity', activitySchema);

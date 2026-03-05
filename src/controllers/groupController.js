@@ -39,16 +39,16 @@ exports.createGroup = async (req, res) => {
             created_by: currentUserId,
         });
 
-        console.log('group', group)
-
         await group.save();
 
         await logActivity({
+            group_id: group.group_id,
             user_id: currentUserId,
-            title: `You created new group "${group.name}"`,
-            description: group.description,
-            type: 'group',
-            meta: { group_id: group.group_id },
+            action_type: 'GROUP_CREATED',
+            details: {
+                description: `You created the group "${group.name}"`,
+                group_name: group.name
+            }
         });
 
         const populatedGroup = await Group.findOne({ group_id: group.group_id })

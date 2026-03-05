@@ -1,5 +1,6 @@
 const Activity = require('../models/Activity');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
+const Group = require('../models/Group');
 
 exports.createActivity = async (req, res) => {
     try {

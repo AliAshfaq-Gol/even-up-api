@@ -49,38 +49,6 @@ exports.addMemberAsUser = async (req, res) => {
     }
 };
 
-// exports.getMyFriends = async (req, res) => {
-//     try {
-//         const loggedInUserId = req.user.user_id;
-
-//         // 1. Find the single document for this user
-//         const friendshipDoc = await Friend.findOne({ user_id: loggedInUserId });
-
-//         // 2. If no doc or empty array, return empty
-//         if (!friendshipDoc || !friendshipDoc.friends.length) {
-//             return res.status(200).json({ success: true, count: 0, data: [] });
-//         }
-
-//         // 3. Extract IDs from the array
-//         const friendIds = friendshipDoc.friends.map(f => f.friend_id);
-
-//         const friendsDetails = await User.find({
-//             user_id: { $in: friendIds }
-//         }).select('user_id full_name phone_number is_active');
-
-//         return res.status(200).json({
-//             success: true,
-//             count: friendsDetails.length,
-//             data: friendsDetails
-//         });
-//     } catch (error) {
-//         console.error('Fetch Friends Error:', error);
-//         return res.status(500).json({ success: false, message: 'Server error' });
-//     }
-// };
-
-
-
 
 exports.getMyFriends = async (req, res) => {
     try {

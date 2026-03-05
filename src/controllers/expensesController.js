@@ -7,6 +7,7 @@ const User = require('../models/User');
 exports.createExpense = async (req, res) => {
   try {
     const { amount, description, paid_by, group_id, date, splits } = req.body;
+    const currentUserId = req.user.user_id;
 
     // 1. Validation including the new 'splits' array
     if (!amount || !description || !paid_by?.user_id || !group_id || !splits || !splits.length) {
@@ -44,7 +45,7 @@ exports.createExpense = async (req, res) => {
     // We log once for the group activity feed
     await logActivity({
       group_id,
-      user_id: paid_by.user_id,
+      user_id: currentUserId,
       action_type: 'EXPENSE_ADDED',
       details: {
         expense_id: savedExpense.expense_id,

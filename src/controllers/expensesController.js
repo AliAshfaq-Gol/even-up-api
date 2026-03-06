@@ -9,7 +9,6 @@ exports.createExpense = async (req, res) => {
     const { amount, description, paid_by, group_id, date, splits } = req.body;
     const currentUserId = req.user.user_id;
 
-    // 1. Validation including the new 'splits' array
     if (!amount || !description || !paid_by?.user_id || !group_id || !splits || !splits.length) {
       return errorResponse(res, 'Amount, description, group_id, payer, and split details are required', 400);
     }
@@ -41,8 +40,6 @@ exports.createExpense = async (req, res) => {
       { $inc: { totalSpending: numericAmount } }
     );
 
-    // 5. LOG ACTIVITY (As requested)
-    // We log once for the group activity feed
     await logActivity({
       group_id,
       user_id: currentUserId,
@@ -50,7 +47,8 @@ exports.createExpense = async (req, res) => {
       details: {
         expense_id: savedExpense.expense_id,
         amount: numericAmount,
-        expense_desc: description // used by the switch case above
+        expense_desc: description,
+        paid_by: savedExpense.paid_by,
       }
     });
 

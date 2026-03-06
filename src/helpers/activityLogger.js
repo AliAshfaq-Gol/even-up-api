@@ -2,10 +2,6 @@ const Activity = require('../models/Activity');
 const User = require('../models/User');
 const Group = require('../models/Group');
 
-/**
- * Professional Activity Logger for EvenUp
- * @param {Object} params - { group_id, user_id, action_type, details }
- */
 exports.logActivity = async ({ group_id, user_id, action_type, details }) => {
     try {
         // 1. Fetch user name for the description if not provided
@@ -19,36 +15,44 @@ exports.logActivity = async ({ group_id, user_id, action_type, details }) => {
             groupName = group ? group.name : "";
         }
 
-        // 3. Generate a clean human-readable description
+        let memberName = "";
+        if (details?.friend_id) {
+            const groupMember = await User.findOne({ user_id: details.friend_id }).select('full_name');
+            memberName = groupMember.full_name;
+        }
+
         let generatedDescription = details.description || "";
 
         if (!generatedDescription) {
             switch (action_type) {
                 case 'EXPENSE_ADDED':
-                    generatedDescription = `${userName} added "${details.expense_desc}" ${groupName ? `in ${groupName}` : ""}`;
+                    generatedDescription = `${userName} added "${details.expense_desc}"`;
                     break;
                 case 'SETTLEMENT':
                     generatedDescription = `${userName} recorded a payment`;
                     break;
                 case 'MEMBER_ADDED':
-                    generatedDescription = `${userName} added a new member to the group`;
+                    generatedDescription = `${userName} added ${memberName} to the group`;
+                    break;
+                case 'MEMBER_REMOVED':
+                    generatedDescription = `${userName} removed ${memberName} from the group`;
                     break;
                 case 'GROUP_CREATED':
-                    generatedDescription = `${userName} created the group "${groupName}"`;
+                    generatedDescription = `${userName} created new group`;
                     break;
                 default:
                     generatedDescription = `${userName} performed an action`;
             }
         }
 
-        // 4. Save to DB
         const activity = new Activity({
             group_id,
             user_id,
             action_type,
             details: {
                 ...details,
-                description: generatedDescription
+                description: generatedDescription,
+                group_name: groupName,
             },
             timestamp: new Date()
         });
@@ -58,7 +62,6 @@ exports.logActivity = async ({ group_id, user_id, action_type, details }) => {
 
         return { success: true };
     } catch (error) {
-        // We don't want an activity log failure to crash the main transaction
         console.error('Activity Logging Error:', error);
         return { success: false };
     }

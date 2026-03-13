@@ -13,32 +13,37 @@ exports.signup = async (req, res) => {
             return errorResponse(res, 'All fields are required', 400);
         }
 
-        const existingUser = await User.findOne({
-            $or: [{ email }, { phone_number }],
-        });
+        // 1. Look for an existing user by phone
+        let user = await User.findOne({ phone_number });
 
-        if (existingUser) {
-            if (existingUser.email === email) {
-                return errorResponse(res, 'Email already registered', 200);
+        if (user) {
+            // 2. Check if this is a real registered user or just a placeholder
+            // If they have a password, it means they are already a full user
+            if (user.password || user.email === email) {
+                return errorResponse(res, 'User already registered with this phone or email', 200);
             }
-            if (existingUser.phone_number === phone_number) {
-                return errorResponse(res, 'Phone number already registered', 200);
-            }
+
+            // 3. CLAIM LOGIC: Update the placeholder with real data
+            user.full_name = full_name;
+            user.email = email;
+            user.password = password;
+            user.is_active = true;
+            // If you have a 'is_placeholder' flag, set it to false here
+
+            await user.save();
+        } else {
+            // 4. NORMAL LOGIC: Create brand new user
+            user = new User({
+                full_name,
+                email,
+                phone_number,
+                password,
+            });
+            await user.save();
         }
-
-        const user = new User({
-            full_name,
-            email,
-            phone_number,
-            password,
-        });
-
-        await user.save();
 
         const userResponse = user.toObject();
         delete userResponse.password;
-
-        console.log('userResponse', userResponse);
 
         return successResponse(res, userResponse, 'User registered successfully', 201);
     } catch (error) {

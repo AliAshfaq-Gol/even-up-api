@@ -1,49 +1,52 @@
 const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid');
 
-const activitySchema = new mongoose.Schema(
-    {
-        activity_id: {
-            type: String,
-            default: uuidv4,
-            unique: true,
-            required: true,
+const activitySchema = new mongoose.Schema({
+    group_id: {
+        type: String,
+        ref: 'Group',
+        default: null
+    },
+    user_id: {
+        type: String,
+        required: true
+    },
+    action_type: {
+        type: String,
+        enum: ['GROUP_CREATED', 'MEMBER_ADDED', 'MEMBER_REMOVED', 'EXPENSE_ADDED', 'EXPENSE_UPDATED', 'SETTLEMENT', 'MEMBER_REMOVED'],
+        required: true
+    },
+    details: {
+        target_user_id: { // e.g., who was added/removed
+            type: String
         },
-        user_id: {
-            type: String,
-            required: true, // who performed the action
-        },
-        title: {
-            type: String,
-            required: true, // short message e.g. "You created a new group"
-        },
-        description: {
-            type: String,
-            default: '', // optional details
-        },
-        type: {
-            type: String,
-            enum: ['group', 'expense', 'payment', 'settlement', 'system'],
-            default: 'system',
+        expense_id: {
+            type: String
         },
         amount: {
-            type: Number,
-            default: 0, // for monetary activities
+            type: Number
         },
-        currency: {
-            type: String,
-            default: 'PKR',
+        description: {// e.g., "Ali added 'Dinner' in 'Trip to Murree'"
+            type: String
         },
-        meta: {
-            type: Object,
-            default: {}, // store extra info (group_id, expense_id, etc.)
+        group_name: {
+            type: String
         },
-        created_at: {
-            type: Number,
-            default: Date.now,
+        paid_by: {
+            type: Object
         },
     },
-    { versionKey: false }
-);
+    created_at: {
+        type: Number,
+        default: () => Date.now(),
+    },
+    updated_at: {
+        type: Number,
+        default: () => Date.now(),
+    },
+    timestamp: {
+        type: Date,
+        default: Date.now
+    }
+});
 
 module.exports = mongoose.model('Activity', activitySchema);

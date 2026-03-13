@@ -42,6 +42,13 @@ const expenseSchema = new mongoose.Schema(
       type: Number,
       default: () => Date.now(),
     },
+    splits: [
+        {
+            user_id: { type: String, required: true },
+            full_name: { type: String },
+            amount_owed: { type: Number, required: true } // Their specific share
+        }
+    ],
   },
   { timestamps: false }
 );

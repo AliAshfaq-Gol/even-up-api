@@ -39,16 +39,14 @@ exports.createGroup = async (req, res) => {
             created_by: currentUserId,
         });
 
-        console.log('group', group)
-
         await group.save();
 
         await logActivity({
+            group_id: group.group_id,
             user_id: currentUserId,
-            title: `You created new group "${group.name}"`,
-            description: group.description,
-            type: 'group',
-            meta: { group_id: group.group_id },
+            action_type: 'GROUP_CREATED',
+            details: {
+            }
         });
 
         const populatedGroup = await Group.findOne({ group_id: group.group_id })
@@ -122,10 +120,11 @@ exports.getUserGroups = async (req, res) => {
     }
 };
 
-// 2. Add function to save members to the group
 exports.addMemberToGroup = async (req, res) => {
     try {
         const { group_id, friend_id } = req.body;
+        const currentUserId = req.user.user_id;
+
 
         if (!group_id || !friend_id) {
             return errorResponse(res, 'Group ID and Friend ID are required', 400);
@@ -148,6 +147,15 @@ exports.addMemberToGroup = async (req, res) => {
             return errorResponse(res, 'Group not found', 404);
         }
 
+        await logActivity({
+            group_id: group.group_id,
+            user_id: currentUserId,
+            action_type: 'MEMBER_ADDED',
+            details: {
+                friend_id: friend_id
+            }
+        });
+
         return successResponse(res, group, 'Member added to group successfully', 200);
     } catch (error) {
         console.error('Add member error:', error);
@@ -158,6 +166,7 @@ exports.addMemberToGroup = async (req, res) => {
 exports.removeMemberFromGroup = async (req, res) => {
     try {
         const { group_id, friend_id } = req.body;
+        const currentUserId = req.user.user_id;
 
         if (!group_id || !friend_id) {
             return errorResponse(res, 'Group ID and Friend ID are required', 400);
@@ -179,6 +188,15 @@ exports.removeMemberFromGroup = async (req, res) => {
         if (!group) {
             return errorResponse(res, 'Group not found', 404);
         }
+
+        await logActivity({
+            group_id: group.group_id,
+            user_id: currentUserId,
+            action_type: 'MEMBER_REMOVED',
+            details: {
+                friend_id: friend_id
+            }
+        });
 
         return successResponse(res, group, 'Member removed from group successfully', 200);
     } catch (error) {

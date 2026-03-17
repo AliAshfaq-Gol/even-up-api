@@ -62,12 +62,90 @@ exports.createExpense = async (req, res) => {
 exports.getExpensesByGroup = async (req, res) => {
   try {
     const { group_id } = req.params;
+    const user_id = req.user.user_id;
     if (!group_id) return errorResponse(res, 'Group ID is required', 400);
 
-    const expenses = await Expense.find({ group_id }).sort({ date: -1, created_at: -1 });
-    return successResponse(res, expenses, `Fetched ${expenses.length} expenses`, 200);
+    // 1. Fetch Group and Expenses simultaneously
+    const [group, expenses] = await Promise.all([
+      Group.findOne({ group_id }),
+      Expense.find({ group_id }).sort({ date: -1, created_at: -1 })
+    ]);
+
+    if (!group) return errorResponse(res, 'Group not found', 404);
+
+    // 2. Calculate Total Spending
+    const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    // 3. Dynamic Member Detection (Protects against added/removed members)
+    // We look at current group members + anyone mentioned in historical expenses
+    const expenseUserIds = expenses.flatMap(exp => [
+      exp.paid_by.user_id,
+      ...exp.splits.map(s => s.user_id)
+    ]);
+
+    const allUniqueMemberIds = [...new Set([
+      group.created_by,
+      ...group.members,
+      ...expenseUserIds
+    ])];
+
+    // 4. Calculate Individual Standings
+    let memberBalances = allUniqueMemberIds.map(mId => {
+      const totalPaid = expenses
+        .filter(exp => String(exp.paid_by.user_id) === String(mId))
+        .reduce((sum, exp) => sum + exp.amount, 0);
+
+      const totalOwed = expenses.reduce((sum, exp) => {
+        const userSplit = exp.splits.find(s => String(s.user_id) === String(mId));
+        return sum + (userSplit ? userSplit.amount_owed : 0);
+      }, 0);
+
+      return {
+        user_id: mId,
+        totalPaid: Number(totalPaid.toFixed(2)),
+        totalOwed: Number(totalOwed.toFixed(2)),
+        netBalance: Number((totalPaid - totalOwed).toFixed(2))
+      };
+    });
+
+    // 5. Settlement Algorithm (Who pays whom)
+    let tempBalances = memberBalances.map(m => ({ ...m }));
+    let payers = tempBalances.filter(m => m.netBalance < 0).sort((a, b) => a.netBalance - b.netBalance);
+    let receivers = tempBalances.filter(m => m.netBalance > 0).sort((a, b) => b.netBalance - a.netBalance);
+
+    let settlements = [];
+    payers.forEach(payer => {
+      receivers.forEach(receiver => {
+        let amountToPay = Math.min(Math.abs(payer.netBalance), receiver.netBalance);
+        if (amountToPay > 0.01) {
+          settlements.push({
+            from: payer.user_id,
+            to: receiver.user_id,
+            amount: Number(amountToPay.toFixed(2))
+          });
+          payer.netBalance += amountToPay;
+          receiver.netBalance -= amountToPay;
+        }
+      });
+    });
+
+    // 6. Identify "My" specific standing
+    const currentUserStanding = memberBalances.find(m => String(m.user_id) === String(user_id));
+
+    // 7. Final Combined Response
+    return successResponse(res, {
+      expenses, // The full list of expenses
+      summary: {
+        totalSpending: Number(totalSpending.toFixed(2)),
+        myBalance: currentUserStanding ? currentUserStanding.netBalance : 0,
+        allMembers: memberBalances,
+        settlements
+      }
+    }, `Fetched group data and balances successfully`, 200);
+
   } catch (error) {
-    return errorResponse(res, 'An error occurred while fetching expenses', 500);
+    console.error('Unified Fetch Error:', error);
+    return errorResponse(res, 'An error occurred while fetching group data', 500);
   }
 };
 

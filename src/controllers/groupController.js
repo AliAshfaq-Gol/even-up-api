@@ -96,20 +96,25 @@ exports.getUserGroups = async (req, res) => {
             const expenses = await Expense.find({ group_id: group.group_id });
 
             const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-            const allMembers = [...new Set([group.created_by, ...group.members])];
-            const sharePerPerson = totalSpending > 0 ? totalSpending / allMembers.length : 0;
 
+            // Calculate how much THIS specific user actually owes across all expenses
+            const totalUserOwes = expenses.reduce((sum, exp) => {
+                const userSplit = exp.splits.find(s => String(s.user_id) === String(user_id));
+                return sum + (userSplit ? userSplit.amount_owed : 0);
+            }, 0);
+
+            // Calculate how much THIS specific user paid
             const userPaid = expenses
                 .filter(exp => String(exp.paid_by.user_id) === String(user_id))
                 .reduce((sum, exp) => sum + exp.amount, 0);
 
-            // We calculate the value and assign it to totalOwed
-            const calculatedOwed = Number((userPaid - sharePerPerson).toFixed(2));
+            // Final balance: What I paid - What I owe
+            const calculatedOwed = Number((userPaid - totalUserOwes).toFixed(2));
 
             return {
                 ...group._doc,
                 totalSpending: Number(totalSpending.toFixed(2)),
-                totalOwed: calculatedOwed // This replaces "personalBalance"
+                totalOwed: calculatedOwed
             };
         }));
 

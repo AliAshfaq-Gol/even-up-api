@@ -53,63 +53,134 @@ exports.addMemberAsUser = async (req, res) => {
 exports.getMyFriends = async (req, res) => {
     try {
         const currentUserId = req.user.user_id;
+        const round2 = (value) => Number((value || 0).toFixed(2));
+        const getGroupSettlements = (group, expenses) => {
+            const expenseUserIds = expenses.flatMap(exp => [
+                exp.paid_by.user_id,
+                ...exp.splits.map(s => s.user_id)
+            ]);
+            const allMemberIds = [...new Set([
+                group.created_by,
+                ...group.members,
+                ...expenseUserIds
+            ])];
 
-        // 1. Get the friend document
+            const memberBalances = allMemberIds.map(memberId => {
+                const totalPaid = expenses
+                    .filter(exp => String(exp.paid_by.user_id) === String(memberId))
+                    .reduce((sum, exp) => sum + exp.amount, 0);
+
+                const totalOwed = expenses.reduce((sum, exp) => {
+                    const split = exp.splits.find(s => String(s.user_id) === String(memberId));
+                    return sum + (split ? split.amount_owed : 0);
+                }, 0);
+
+                return {
+                    user_id: memberId,
+                    netBalance: round2(totalPaid - totalOwed)
+                };
+            });
+
+            const tempBalances = memberBalances.map(m => ({ ...m }));
+            const payers = tempBalances
+                .filter(m => m.netBalance < -0.01)
+                .sort((a, b) => a.netBalance - b.netBalance);
+            const receivers = tempBalances
+                .filter(m => m.netBalance > 0.01)
+                .sort((a, b) => b.netBalance - a.netBalance);
+
+            const settlements = [];
+            payers.forEach(payer => {
+                receivers.forEach(receiver => {
+                    const amountToPay = Math.min(Math.abs(payer.netBalance), receiver.netBalance);
+                    if (amountToPay > 0.01) {
+                        settlements.push({
+                            from: payer.user_id,
+                            to: receiver.user_id,
+                            amount: round2(amountToPay)
+                        });
+                        payer.netBalance = round2(payer.netBalance + amountToPay);
+                        receiver.netBalance = round2(receiver.netBalance - amountToPay);
+                    }
+                });
+            });
+
+            return settlements;
+        };
+
         const friendDoc = await Friend.findOne({ user_id: currentUserId });
-        
+
         if (!friendDoc || !friendDoc.friends || friendDoc.friends.length === 0) {
             return res.status(200).json({ success: true, data: [], message: 'No friends found' });
         }
 
-        // 2. Map through each friend
-        const friendsWithBalances = await Promise.all(friendDoc.friends.map(async (f) => {
-            const friendId = f.friend_id;
+        const friendIds = friendDoc.friends.map(f => f.friend_id);
 
-            // Find all expenses where:
-            // (You paid AND friend is in splits) OR (Friend paid AND you are in splits)
-            const expenses = await Expense.find({
+        const [groups, friendUsers] = await Promise.all([
+            Group.find({
                 $or: [
-                    { "paid_by.user_id": currentUserId, "splits.user_id": friendId },
-                    { "paid_by.user_id": friendId, "splits.user_id": currentUserId }
+                    { created_by: currentUserId },
+                    { members: currentUserId }
                 ]
-            });
+            }).select('group_id created_by members'),
+            User.find({ user_id: { $in: friendIds } }).select('user_id full_name phone_number')
+        ]);
 
+        const allGroupIds = groups.map(g => g.group_id);
+        const allGroupExpenses = allGroupIds.length
+            ? await Expense.find({ group_id: { $in: allGroupIds } })
+            : [];
+
+        const expensesByGroup = allGroupExpenses.reduce((acc, expense) => {
+            if (!acc[expense.group_id]) acc[expense.group_id] = [];
+            acc[expense.group_id].push(expense);
+            return acc;
+        }, {});
+
+        const friendInfoMap = friendUsers.reduce((acc, user) => {
+            acc[user.user_id] = user;
+            return acc;
+        }, {});
+
+        const friendsWithBalances = friendIds.map(friendId => {
             let youOwe = 0;
             let theyOweYou = 0;
 
-            expenses.forEach(exp => {
-                const paidByMe = String(exp.paid_by.user_id) === String(currentUserId);
-                const paidByFriend = String(exp.paid_by.user_id) === String(friendId);
-
-                if (paidByMe) {
-                    // You paid the bill, find how much this specific friend owes you
-                    const split = exp.splits.find(s => String(s.user_id) === String(friendId));
-                    if (split) {
-                        theyOweYou += split.amount_owed;
-                    }
-                }
-
-                if (paidByFriend) {
-                    // Friend paid the bill, find how much you owe them
-                    const split = exp.splits.find(s => String(s.user_id) === String(currentUserId));
-                    if (split) {
-                        youOwe += split.amount_owed;
-                    }
-                }
+            const sharedGroups = groups.filter(group => {
+                const participants = new Set([group.created_by, ...group.members]);
+                return participants.has(friendId);
             });
 
-            // Fetch friend info for the UI
-            const friendInfo = await User.findOne({ user_id: friendId }).select('full_name phone_number');
+            sharedGroups.forEach(group => {
+                const groupExpenses = expensesByGroup[group.group_id] || [];
+                const settlements = getGroupSettlements(group, groupExpenses);
+
+                settlements.forEach(settlement => {
+                    if (
+                        String(settlement.from) === String(currentUserId) &&
+                        String(settlement.to) === String(friendId)
+                    ) {
+                        youOwe += settlement.amount;
+                    }
+
+                    if (
+                        String(settlement.from) === String(friendId) &&
+                        String(settlement.to) === String(currentUserId)
+                    ) {
+                        theyOweYou += settlement.amount;
+                    }
+                });
+            });
 
             return {
                 user_id: friendId,
-                full_name: friendInfo?.full_name || 'Unknown User',
-                phone_number: friendInfo?.phone_number,
-                youOwe: Number(youOwe.toFixed(2)),
-                theyOweYou: Number(theyOweYou.toFixed(2)),
-                net: Number((theyOweYou - youOwe).toFixed(2))
+                full_name: friendInfoMap[friendId]?.full_name || 'Unknown User',
+                phone_number: friendInfoMap[friendId]?.phone_number,
+                youOwe: round2(youOwe),
+                theyOweYou: round2(theyOweYou),
+                net: round2(theyOweYou - youOwe)
             };
-        }));
+        });
 
         return res.status(200).json({
             success: true,

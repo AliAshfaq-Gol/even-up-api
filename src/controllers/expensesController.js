@@ -76,12 +76,24 @@ exports.getExpensesByGroup = async (req, res) => {
     // 2. Calculate Total Spending
     const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-    // 3. Dynamic Member Detection (Protects against added/removed members)
-    // We look at current group members + anyone mentioned in historical expenses
-    const expenseUserIds = expenses.flatMap(exp => [
-      exp.paid_by.user_id,
-      ...exp.splits.map(s => s.user_id)
-    ]);
+    // 3. Dynamic Member Detection & Name Mapping
+    // We create a map to store names found within the expense objects
+    const expenseUserIds = [];
+    const nameMap = {}; 
+
+    expenses.forEach(exp => {
+      // Map name from 'paid_by'
+      if (exp.paid_by) {
+        expenseUserIds.push(exp.paid_by.user_id);
+        nameMap[exp.paid_by.user_id] = exp.paid_by.full_name;
+      }
+      
+      // Map names from 'splits'
+      exp.splits.forEach(s => {
+        expenseUserIds.push(s.user_id);
+        nameMap[s.user_id] = s.full_name;
+      });
+    });
 
     const allUniqueMemberIds = [...new Set([
       group.created_by,
@@ -102,6 +114,7 @@ exports.getExpensesByGroup = async (req, res) => {
 
       return {
         user_id: mId,
+        full_name: nameMap[mId] || "Group Member",
         totalPaid: Number(totalPaid.toFixed(2)),
         totalOwed: Number(totalOwed.toFixed(2)),
         netBalance: Number((totalPaid - totalOwed).toFixed(2))
@@ -120,7 +133,9 @@ exports.getExpensesByGroup = async (req, res) => {
         if (amountToPay > 0.01) {
           settlements.push({
             from: payer.user_id,
+            from_name: payer.full_name, // Added name to settlement
             to: receiver.user_id,
+            to_name: receiver.full_name, // Added name to settlement
             amount: Number(amountToPay.toFixed(2))
           });
           payer.netBalance += amountToPay;

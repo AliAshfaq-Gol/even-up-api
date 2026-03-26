@@ -67,7 +67,19 @@ exports.getExpensesByGroup = async (req, res) => {
 
     // 1. Fetch Group and Expenses simultaneously
     const [group, expenses] = await Promise.all([
-      Group.findOne({ group_id }),
+      Group.findOne({ group_id }).populate({
+        path: 'members',
+        model: User,
+        select: 'user_id full_name phone_number',
+        localField: 'members',
+        foreignField: 'user_id',
+      }).populate({
+        path: 'created_by',
+        model: User,
+        select: 'user_id full_name phone_number',
+        localField: 'created_by',
+        foreignField: 'user_id',
+      }),
       Expense.find({ group_id }).sort({ date: -1, created_at: -1 })
     ]);
 
@@ -95,11 +107,32 @@ exports.getExpensesByGroup = async (req, res) => {
       });
     });
 
+    // Build a stable user lookup from the populated Group document.
+    // This is required so member names still resolve when there are zero expenses.
+    const userInfoMap = {};
+
+    const createdById = group.created_by?.user_id ? group.created_by.user_id : group.created_by;
+    if (group.created_by?.user_id) {
+      userInfoMap[group.created_by.user_id] = {
+        full_name: group.created_by.full_name,
+        phone_number: group.created_by.phone_number,
+      };
+    }
+
+    const groupMemberIds = (group.members || []).map(m => {
+      if (typeof m === 'string') return m;
+      if (m?.user_id) {
+        userInfoMap[m.user_id] = { full_name: m.full_name, phone_number: m.phone_number };
+        return m.user_id;
+      }
+      return null;
+    }).filter(Boolean);
+
     const allUniqueMemberIds = [...new Set([
-      group.created_by,
-      ...group.members,
+      createdById,
+      ...groupMemberIds,
       ...expenseUserIds
-    ])];
+    ])].filter(Boolean);
 
     // 4. Calculate Individual Standings
     let memberBalances = allUniqueMemberIds.map(mId => {
@@ -112,9 +145,15 @@ exports.getExpensesByGroup = async (req, res) => {
         return sum + (userSplit ? userSplit.amount_owed : 0);
       }, 0);
 
+      // Prefer populated user data; fall back to any name that appeared in expenses.
+      // If the user exists in the database, we should never drop to a generic placeholder.
+      const populatedUser = userInfoMap[mId];
+      const full_name = populatedUser?.full_name || nameMap[mId] || 'Unknown User';
+
       return {
         user_id: mId,
-        full_name: nameMap[mId] || "Group Member",
+        full_name,
+        phone_number: populatedUser?.phone_number || undefined,
         totalPaid: Number(totalPaid.toFixed(2)),
         totalOwed: Number(totalOwed.toFixed(2)),
         netBalance: Number((totalPaid - totalOwed).toFixed(2))
@@ -161,77 +200,5 @@ exports.getExpensesByGroup = async (req, res) => {
   } catch (error) {
     console.error('Unified Fetch Error:', error);
     return errorResponse(res, 'An error occurred while fetching group data', 500);
-  }
-};
-
-exports.getGroupBalances = async (req, res) => {
-  try {
-    const { group_id } = req.params;
-    const { user_id } = req.query; // The ID of the person viewing the screen
-
-    const group = await Group.findOne({ group_id });
-    if (!group) return errorResponse(res, 'Group not found', 404);
-
-    const expenses = await Expense.find({ group_id });
-
-    // 1. Calculate Total Spending accurately
-    const totalSpending = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-    // 2. Map through all members to calculate their unique standing
-    // We include group creator and members
-    const allMemberIds = [...new Set([group.created_by, ...group.members])];
-
-    let memberBalances = allMemberIds.map(mId => {
-      // Total this person actually paid out of pocket
-      const totalPaid = expenses
-        .filter(exp => String(exp.paid_by.user_id) === String(mId))
-        .reduce((sum, exp) => sum + exp.amount, 0);
-
-      // Total this person actually OWES based on the splits array
-      const totalOwed = expenses.reduce((sum, exp) => {
-        const userSplit = exp.splits.find(s => String(s.user_id) === String(mId));
-        return sum + (userSplit ? userSplit.amount_owed : 0);
-      }, 0);
-
-      return {
-        user_id: mId,
-        totalPaid,
-        totalOwed,
-        netBalance: Number((totalPaid - totalOwed).toFixed(2))
-      };
-    });
-
-    // 3. Settlement Algorithm (Who pays whom)
-    let tempBalances = memberBalances.map(m => ({ ...m }));
-    let payers = tempBalances.filter(m => m.netBalance < 0).sort((a, b) => a.netBalance - b.netBalance);
-    let receivers = tempBalances.filter(m => m.netBalance > 0).sort((a, b) => b.netBalance - a.netBalance);
-
-    let settlements = [];
-    payers.forEach(payer => {
-      receivers.forEach(receiver => {
-        let amountToPay = Math.min(Math.abs(payer.netBalance), receiver.netBalance);
-        if (amountToPay > 0.01) {
-          settlements.push({
-            from: payer.user_id,
-            to: receiver.user_id,
-            amount: Number(amountToPay.toFixed(2))
-          });
-          payer.netBalance += amountToPay;
-          receiver.netBalance -= amountToPay;
-        }
-      });
-    });
-
-    const currentUserStanding = memberBalances.find(m => String(m.user_id) === String(user_id));
-
-    return successResponse(res, {
-      totalSpending,
-      myBalance: currentUserStanding ? currentUserStanding.netBalance : 0,
-      allMembers: memberBalances,
-      settlements
-    }, 'Precise balances and settlements calculated');
-  } catch (error) {
-    console.error('Balance Error:', error);
-    return errorResponse(res, 'Error calculating precise balances', 500);
   }
 };

@@ -1,6 +1,71 @@
 const User = require('../models/User');
+const Friend = require('../models/Friend');
+const Group = require('../models/Group');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 const jwt = require('jsonwebtoken');
+
+const reconcileFriendships = async (newUserId) => {
+    try {
+        const newUserIdStr = String(newUserId);
+
+        // Groups where this new user is either a member or the creator.
+        const groups = await Group.find({
+            $or: [{ members: newUserIdStr }, { created_by: newUserIdStr }]
+        }).select('created_by members');
+
+        // Collect all unique "other" users who are part of these groups.
+        const memberIdsSet = new Set();
+        groups.forEach((g) => {
+            if (g.created_by) memberIdsSet.add(String(g.created_by));
+            if (Array.isArray(g.members)) {
+                g.members.forEach((memberId) => {
+                    if (memberId) memberIdsSet.add(String(memberId));
+                });
+            }
+        });
+        memberIdsSet.delete(newUserIdStr);
+
+        const memberIds = [...memberIdsSet];
+        if (memberIds.length === 0) return;
+
+        // Link both directions: newUser -> member, member -> newUser.
+        // Best-effort: if one direction fails, we still attempt the other for this member.
+        for (const memberId of memberIds) {
+            try {
+                const [existsNewToMember, existsMemberToNew] = await Promise.all([
+                    Friend.findOne({ user_id: newUserIdStr, 'friends.friend_id': memberId }).select('_id'),
+                    Friend.findOne({ user_id: memberId, 'friends.friend_id': newUserIdStr }).select('_id'),
+                ]);
+
+                // Only create/update when the friendship doesn't already exist.
+                if (!existsNewToMember) {
+                    await Friend.findOneAndUpdate(
+                        { user_id: newUserIdStr },
+                        { $addToSet: { friends: { friend_id: memberId } } },
+                        { upsert: true }
+                    );
+                }
+
+                if (!existsMemberToNew) {
+                    await Friend.findOneAndUpdate(
+                        { user_id: memberId },
+                        { $addToSet: { friends: { friend_id: newUserIdStr } } },
+                        { upsert: true }
+                    );
+                }
+            } catch (err) {
+                // Keep going even if one member linkage attempt fails.
+                console.error(`reconcileFriendships link failed for ${memberId}:`, err);
+            }
+        }
+    } catch (error) {
+        // Best-effort only: never break signup.
+        console.error('reconcileFriendships failed:', error);
+    }
+};
+
+// Export for other controllers (silent sync on group member add).
+exports.reconcileFriendships = reconcileFriendships;
 
 /**
  * Signup controller - Creates a new user account
@@ -31,6 +96,7 @@ exports.signup = async (req, res) => {
             // If you have a 'is_placeholder' flag, set it to false here
 
             await user.save();
+            await reconcileFriendships(user.user_id);
         } else {
             // 4. NORMAL LOGIC: Create brand new user
             user = new User({
@@ -40,6 +106,7 @@ exports.signup = async (req, res) => {
                 password,
             });
             await user.save();
+            await reconcileFriendships(user.user_id);
         }
 
         const userResponse = user.toObject();

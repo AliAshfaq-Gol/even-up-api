@@ -2,6 +2,7 @@ const { logActivity } = require('../helpers/activityLogger');
 const Expense = require('../models/Expense');
 const Group = require('../models/Group');
 const User = require('../models/User');
+const { reconcileFriendships } = require('./authController');
 const { successResponse, errorResponse } = require('../utils/responseHandler');
 
 exports.createGroup = async (req, res) => {
@@ -160,6 +161,12 @@ exports.addMemberToGroup = async (req, res) => {
                 friend_id: friend_id
             }
         });
+
+        try {
+            await reconcileFriendships(friend_id);
+        } catch (err) {
+            console.error('Silent friendship sync failed:', err);
+        }
 
         return successResponse(res, group, 'Member added to group successfully', 200);
     } catch (error) {

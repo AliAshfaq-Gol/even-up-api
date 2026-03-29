@@ -28,6 +28,12 @@ exports.logActivity = async ({ group_id, user_id, action_type, details }) => {
                 case 'EXPENSE_ADDED':
                     generatedDescription = `${userName} added "${details.expense_desc}"`;
                     break;
+                case 'EXPENSE_UPDATED':
+                    generatedDescription = `${userName} updated "${details.expense_desc}"`;
+                    break;
+                case 'EXPENSE_DELETED':
+                    generatedDescription = `${userName} deleted "${details.expense_desc}"`;
+                    break;
                 case 'SETTLEMENT':
                     generatedDescription = `${userName} recorded a payment`;
                     break;

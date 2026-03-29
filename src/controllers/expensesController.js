@@ -202,3 +202,91 @@ exports.getExpensesByGroup = async (req, res) => {
     return errorResponse(res, 'An error occurred while fetching group data', 500);
   }
 };
+
+exports.updateExpense = async (req, res) => {
+  try {
+    const { expense_id } = req.params;
+    const { amount, description, paid_by, group_id, splits } = req.body;
+    const currentUserId = req.user.user_id;
+
+    if (!expense_id || !amount || !description || !paid_by?.user_id || !group_id || !splits?.length) {
+      return errorResponse(res, 'expense_id, amount, description, group_id, payer, and split details are required', 400);
+    }
+
+    const numericAmount = parseFloat(amount);
+    const splitTotal = splits.reduce((sum, s) => sum + parseFloat(s.amount_owed), 0);
+    if (Math.abs(splitTotal - numericAmount) > 0.01) {
+      return errorResponse(res, 'Sum of splits does not match total amount', 400);
+    }
+
+    const updated = await Expense.findOneAndUpdate(
+      { expense_id, group_id },
+      {
+        $set: {
+          amount: numericAmount,
+          description,
+          paid_by,
+          splits,
+          updated_at: Date.now(),
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) return errorResponse(res, 'Expense not found', 404);
+
+    await Group.findOneAndUpdate({ group_id }, { $set: { updated_at: Date.now() } });
+
+    await logActivity({
+      group_id,
+      user_id: currentUserId,
+      action_type: 'EXPENSE_UPDATED',
+      details: {
+        expense_id: updated.expense_id,
+        amount: numericAmount,
+        expense_desc: description,
+        paid_by: updated.paid_by,
+      },
+    });
+
+    return successResponse(res, updated, 'Expense updated successfully', 200);
+  } catch (error) {
+    console.error('Update expense error:', error);
+    return errorResponse(res, 'An error occurred while updating expense', 500);
+  }
+};
+
+exports.deleteExpense = async (req, res) => {
+  try {
+    const { expense_id } = req.params;
+    const { group_id } = req.body;
+    const currentUserId = req.user.user_id;
+
+    if (!expense_id || !group_id) {
+      return errorResponse(res, 'expense_id and group_id are required', 400);
+    }
+
+    const removed = await Expense.findOneAndDelete({ expense_id, group_id });
+
+    if (!removed) return errorResponse(res, 'Expense not found', 404);
+
+    await Group.findOneAndUpdate({ group_id }, { $set: { updated_at: Date.now() } });
+
+    await logActivity({
+      group_id,
+      user_id: currentUserId,
+      action_type: 'EXPENSE_DELETED',
+      details: {
+        expense_id: removed.expense_id,
+        amount: removed.amount,
+        expense_desc: removed.description,
+        paid_by: removed.paid_by,
+      },
+    });
+
+    return successResponse(res, { expense_id: removed.expense_id }, 'Expense deleted successfully', 200);
+  } catch (error) {
+    console.error('Delete expense error:', error);
+    return errorResponse(res, 'An error occurred while deleting expense', 500);
+  }
+};
